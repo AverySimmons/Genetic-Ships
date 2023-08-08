@@ -1,6 +1,5 @@
 #include <stdlib.h>
 #include <math.h>
-#include <time.h>
 
 typedef struct {
     float value;
@@ -156,5 +155,5 @@ void mutateNetwork(NeuralNetwork * nn) {
 }
 
 void writeNetwork(NeuralNetwork * nn) {
-    
+
 }
