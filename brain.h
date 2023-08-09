@@ -144,11 +144,11 @@ void mutateNetwork(NeuralNetwork * nn) {
         for (int j = 0; j < nn->layer_array[i]; j++) {
             for (int k = 0; k < nn->network[i][j]->weight_num; k++) {
                 if (rand() / (float)RAND_MAX < 0.01) {
-                    nn->network[i][j]->weights[k] += (float)rand() / RAND_MAX * 0.2 - 0.1;
+                    nn->network[i][j]->weights[k] += (float)rand() / RAND_MAX * 0.5 - 0.25;
                 }
             }
             if (rand() / (float)RAND_MAX < 0.01) {
-                nn->network[i][j]->bias += (float)rand() / RAND_MAX * 0.2 - 0.1;
+                nn->network[i][j]->bias += (float)rand() / RAND_MAX * 0.5 - 0.25;
             }
         }
     }

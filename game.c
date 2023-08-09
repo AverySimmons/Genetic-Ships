@@ -15,6 +15,7 @@ typedef struct {
     Vector2 direction;
     NeuralNetwork * brain;
     float fitness;
+    float current_speed;
 } Entity;
 
 typedef struct {
@@ -36,6 +37,13 @@ typedef struct ListNode {
     Entity * entity;
     struct ListNode * next;
 } ListNode;
+
+typedef struct {
+    int cell_size;
+    int grid_width;
+    int grid_height;
+    ListNode *** grid;
+} Grid;
 
 float lengthVector2(Vector2 vect) {
     return sqrt(pow(vect.x, 2) + pow(vect.y, 2));
@@ -138,7 +146,7 @@ Game * createGame(int entity_num, Vector2 size, float entity_speed, float entity
     new_game->entities = (Entity **) malloc(sizeof(Entity *) * entity_num);
     for (int i = 0; i < entity_num; i++) {
         new_game->entities[i] = (Entity *) malloc(sizeof(Entity));
-        new_game->entities[i]->brain = createNetwork(5, 2, (int[]){2, 1});
+        new_game->entities[i]->brain = createNetwork(new_game->ray_number, 2, (int[]){4, 2});
         new_game->entities[i]->fitness = 0;
         spawnEntity(new_game->entities[i], new_game);
     }
@@ -154,26 +162,75 @@ void freeGame(Game * game) {
     free(game);
 }
 
+Grid * createGrid(int cell_size, int grid_width, int grid_height) {
+    Grid * new_grid = (Grid *) malloc(sizeof(Grid));
+    new_grid->cell_size = cell_size;
+    new_grid->grid_width = grid_width;
+    new_grid->grid_height = grid_height;
+    new_grid->grid = (ListNode ***) malloc(sizeof(ListNode **) * grid_width);
+    for (int i = 0; i < grid_width; i++) {
+        new_grid->grid[i] = (ListNode **) malloc(sizeof(ListNode *) * grid_height);
+        for (int j = 0; j < grid_height; j++) {
+            new_grid->grid[i][j] = NULL;
+        }
+    }
+    return new_grid;
+}
+
+void freeGrid(Grid * grid) {
+    for (int i = 0; i < grid->grid_width; i++) {
+        for (int j = 0; j < grid->grid_height; j++) {
+            ListNode * current_node = grid->grid[i][j];
+            while (current_node != NULL) {
+                ListNode * temp = current_node;
+                current_node = current_node->next;
+                free(temp);
+            }
+        }
+        free(grid->grid[i]);
+    }
+    free(grid);
+}
+
+void checkEntityRays(Game * game, Entity * ent, Entity * target, float * current_rays, Grid * grid) {
+    Vector2 current_direction = rotateVector2(ent->direction, -game->ray_angle / 2.);
+    float angle_increment = game->ray_angle / (game->ray_number - 1);
+    int cur_cell_x = (int)floor(ent->position.x / grid->cell_size);
+    int cur_cell_y = (int)floor(ent->position.y / grid->cell_size);
+    for (int i = 0; i < game->ray_number; i++) {
+        float closest = game->ray_length;
+        Vector2 ray_start = ent->position;
+        Vector2 ray_end = addVector2(ent->position, flatMultiplyVector2(current_direction, game->ray_length));
+        float collide_ray_length = lineCircleCollision(target->position, game->entity_size, ray_start, ray_end);
+        closest = collide_ray_length < closest ? collide_ray_length : closest;
+        Vector2 x_wall_start = {ent->position.x < game->size.x / 2. ? 0 : game->size.x, 0};
+        Vector2 x_wall_end = {ent->position.x < game->size.x / 2. ? 0 : game->size.x, game->size.y};
+        Vector2 y_wall_start = {0, ent->position.y < game->size.y / 2. ? 0 : game->size.y};
+        Vector2 y_wall_end = {game->size.x, ent->position.y < game->size.y / 2. ? 0 : game->size.y};
+        float x_wall_distance = lineLineCollision(ray_start, x_wall_start, ray_end, x_wall_end);
+        float y_wall_distance = lineLineCollision(ray_start, y_wall_start, ray_end, y_wall_end);
+        closest = x_wall_distance < closest ? x_wall_distance : closest;
+        closest = y_wall_distance < closest ? y_wall_distance : closest;
+        current_rays[i] = closest / game->ray_length < current_rays[i] ? closest / game->ray_length : current_rays[i];
+        current_direction = rotateVector2(current_direction, angle_increment);
+    }
+}
+
 void gameTick(Game * game) {
     float cell_size = game->entity_size + game->ray_length;
     int grid_width = ceil(game->size.x / cell_size);
     int grid_height = ceil(game->size.y / cell_size);
-    ListNode * grid[grid_width][grid_height];
-    for (int i = 0; i < grid_width; i++) {
-        for (int j = 0; j < grid_height; j++) {
-            grid[i][j] = NULL;
-        }
-    }
+    Grid * grid = createGrid(cell_size, grid_width, grid_height);
     for (int i = 0; i < game->entity_num; i++) {
         int cell_x = (int)floor(game->entities[i]->position.x / cell_size);
         int cell_y = (int)floor(game->entities[i]->position.y / cell_size);
         ListNode * new_node = (ListNode *) malloc(sizeof(ListNode));
         new_node->entity = game->entities[i];
         new_node->next = NULL;
-        if (grid[cell_x][cell_y] == NULL) {
-            grid[cell_x][cell_y] = new_node;
+        if (grid->grid[cell_x][cell_y] == NULL) {
+            grid->grid[cell_x][cell_y] = new_node;
         } else {
-            ListNode * current_node = grid[cell_x][cell_y];
+            ListNode * current_node = grid->grid[cell_x][cell_y];
             while (current_node->next != NULL) {
                 current_node = current_node->next;
             }
@@ -181,55 +238,50 @@ void gameTick(Game * game) {
         }
     }
     for (int r = 0; r < game->entity_num; r++) {
-        float ray_length_array[game->ray_number];
-        Vector2 current_direction = rotateVector2(game->entities[r]->direction, -game->ray_angle / 2.);
-        float angle_increment = game->ray_angle / (game->ray_number - 1);
         int cur_cell_x = (int)floor(game->entities[r]->position.x / cell_size);
         int cur_cell_y = (int)floor(game->entities[r]->position.y / cell_size);
+
+        float * ray_length_array = (float *) malloc(sizeof(float) * game->ray_number);
         for (int i = 0; i < game->ray_number; i++) {
-            float closest = game->ray_length;
-            Vector2 ray_start = game->entities[r]->position;
-            Vector2 ray_end = addVector2(game->entities[r]->position, flatMultiplyVector2(current_direction, game->ray_length));
-            for (int j = -1; j <= 1; j++) {
-                if (cur_cell_x + j > grid_width - 1 || cur_cell_x + j < 0) {continue;}
-                for (int k = -1; k <= 1; k++) {
-                    if (cur_cell_y + k > grid_height - 1 || cur_cell_y + k < 0) {continue;}
-                    ListNode * current_node = grid[cur_cell_x + j][cur_cell_y + k];
-                    while (current_node != NULL) {
-                        if (current_node->entity == game->entities[r]) {
-                            current_node = current_node->next;
-                            continue;
-                        }
-                        float collide_ray_length = lineCircleCollision(current_node->entity->position, game->entity_size, ray_start, ray_end);
-                        closest = collide_ray_length < closest ? collide_ray_length : closest;
+            ray_length_array[i] = 1.;
+        }
+
+        for (int j = -1; j <= 1; j++) {
+            if (cur_cell_x + j > grid_width - 1 || cur_cell_x + j < 0) {continue;}
+            for (int k = -1; k <= 1; k++) {
+                if (cur_cell_y + k > grid_height - 1 || cur_cell_y + k < 0) {continue;}
+                ListNode * current_node = grid->grid[cur_cell_x + j][cur_cell_y + k];
+                while (current_node != NULL) {
+                    if (current_node->entity == game->entities[r]) {
                         current_node = current_node->next;
+                        continue;
                     }
+                    // check against node
+                    checkEntityRays(game, game->entities[r], current_node->entity, ray_length_array, grid);
+
+                    current_node = current_node->next;
                 }
             }
-            Vector2 x_wall_start = {game->entities[r]->position.x < game->size.x / 2. ? 0 : game->size.x, 0};
-            Vector2 x_wall_end = {game->entities[r]->position.x < game->size.x / 2. ? 0 : game->size.x, game->size.y};
-            Vector2 y_wall_start = {0, game->entities[r]->position.y < game->size.y / 2. ? 0 : game->size.y};
-            Vector2 y_wall_end = {game->size.x, game->entities[r]->position.y < game->size.y / 2. ? 0 : game->size.y};
-            float x_wall_distance = lineLineCollision(ray_start, x_wall_start, ray_end, x_wall_end);
-            float y_wall_distance = lineLineCollision(ray_start, y_wall_start, ray_end, y_wall_end);
-            closest = x_wall_distance < closest ? x_wall_distance : closest;
-            closest = y_wall_distance < closest ? y_wall_distance : closest;
-            if (closest == 0) {
-                game->entities[r]->fitness -= 1;
+        }
+        for (int cur = 0; cur < game->ray_number; cur++) {
+            //printf("ent num: %i, ray num: %i, ray_length: %f\n", r, cur, ray_length_array[cur]);
+            if (ray_length_array[cur] == 0) {
+                game->entities[r]->fitness += 20;
             }
-            ray_length_array[i] = closest;
-            current_direction = rotateVector2(current_direction, angle_increment);
         }
         float * brain_output = calculateNetwork(game->entities[r]->brain, game->ray_number, ray_length_array);
-        game->entities[r]->direction = rotateVector2(game->entities[r]->direction, *brain_output * game->turn_speed);
+        free(ray_length_array);
+        game->entities[r]->direction = rotateVector2(game->entities[r]->direction, (brain_output[0] - 0.5) * game->turn_speed);
+        game->entities[r]->current_speed = brain_output[1];
         free(brain_output);
     }
+    freeGrid(grid);
     for (int i = 0; i < game->entity_num; i++) {
-        game->entities[i]->position = addVector2(game->entities[i]->position, flatMultiplyVector2(game->entities[i]->direction, game->entity_speed));
+        game->entities[i]->position = addVector2(game->entities[i]->position, flatMultiplyVector2(game->entities[i]->direction, game->entity_speed * game->entities[i]->current_speed));
         if (game->entities[i]->position.x < 0 || game->entities[i]->position.x >= game->size.x || 
          game->entities[i]->position.y < 0 || game->entities[i]->position.y >= game->size.y) {
             spawnEntity(game->entities[i], game);
-            game->entities[i]->fitness -= 40;
+            game->entities[i]->fitness += 0;
             game->crashes += 1;
         }
     }
@@ -248,10 +300,25 @@ int compareFitness(const void* a, const void* b) {
     return (structA->fitness - structB->fitness);
 }
 
+void writePositions(Game * game) {
+    FILE * fp = fopen("data.bin", "ab");
+    for (int i = 0; i < game->entity_num; i++) {
+        fwrite(&game->entities[i]->position.x, sizeof(float), 1, fp);
+        fwrite(&game->entities[i]->position.y, sizeof(float), 1, fp);
+    }
+    fclose(fp);
+}
+
 void gameEnd(Game * game) {
-    int crossover_safe_number = ceil(game->entity_num / 5.);
+    int crossover_safe_number = ceil(game->entity_num / 2.);
     int mutate_safe_number = ceil(game->entity_num / 20.);
     qsort(game->entities, game->entity_num, sizeof(Entity *), compareFitness);
+    float average_fitness = 0;
+    for (int i = 0; i < game->entity_num; i++) {
+        average_fitness += game->entities[i]->fitness;
+    }
+    average_fitness /= game->entity_num;
+    printf("crashes: %i - best_fitness: %f - average_fitness: %f\n", game->crashes, game->entities[game->entity_num-1]->fitness, average_fitness);
     for (int i = 0; i < game->entity_num; i++) {
         if (i < game->entity_num - crossover_safe_number && i % 2 == 0) {
             int parent_index1 = game->entity_num - 1 - rand() % crossover_safe_number;
@@ -264,17 +331,31 @@ void gameEnd(Game * game) {
         game->entities[i]->fitness = 0;
         spawnEntity(game->entities[i], game);
     }
-    printf("%i\n", game->crashes);
+}
+
+void writeGameHeader(Game * game) {
+    FILE * fp = fopen("data.bin", "wb");
+    fwrite(&game->size.x, sizeof(float), 1, fp);
+    fwrite(&game->size.y, sizeof(float), 1, fp);
+    fwrite(&game->entity_num, sizeof(int), 1, fp);
+    fwrite(&game->entity_size, sizeof(float), 1, fp);
+    fwrite(&game->max_ticks, sizeof(int), 1, fp);
+    fclose(fp);
 }
 
 int main() {
     srand(time(NULL));
-    Game * game = createGame(20, (Vector2){100, 100}, 1, 5, 3.1415 / 2, 10, 5, 3.1415 / 2., 10000, 100);
+    Game * game = createGame(100, (Vector2){500, 500}, 1, 5, 0.4, 20, 7, 2 * 3.1415 / 3, 3000, 100);
+    writeGameHeader(game);
     for (int epoch = 0; epoch < game->max_epochs; epoch++) {
         game->crashes = 0;
         for (int tick = 0; tick < game->max_ticks; tick++) {
             gameTick(game);
+            if (epoch == game->max_epochs - 1) {
+                writePositions(game);
+            }
         }
+        printf("epoch %i: ", epoch);
         gameEnd(game);
     }
     freeGame(game);
