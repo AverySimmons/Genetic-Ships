@@ -2,7 +2,6 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdbool.h>
-#include <time.h>
 #include "brain.h"
 
 typedef struct {
@@ -203,16 +202,25 @@ void checkEntityRays(Game * game, Entity * ent, Entity * target, float * current
         Vector2 ray_end = addVector2(ent->position, flatMultiplyVector2(current_direction, game->ray_length));
         float collide_ray_length = lineCircleCollision(target->position, game->entity_size, ray_start, ray_end);
         closest = collide_ray_length < closest ? collide_ray_length : closest;
-        Vector2 x_wall_start = {ent->position.x < game->size.x / 2. ? 0 : game->size.x, 0};
-        Vector2 x_wall_end = {ent->position.x < game->size.x / 2. ? 0 : game->size.x, game->size.y};
-        Vector2 y_wall_start = {0, ent->position.y < game->size.y / 2. ? 0 : game->size.y};
-        Vector2 y_wall_end = {game->size.x, ent->position.y < game->size.y / 2. ? 0 : game->size.y};
-        float x_wall_distance = lineLineCollision(ray_start, x_wall_start, ray_end, x_wall_end);
-        float y_wall_distance = lineLineCollision(ray_start, y_wall_start, ray_end, y_wall_end);
-        closest = x_wall_distance < closest ? x_wall_distance : closest;
-        closest = y_wall_distance < closest ? y_wall_distance : closest;
         current_rays[i] = closest / game->ray_length < current_rays[i] ? closest / game->ray_length : current_rays[i];
         current_direction = rotateVector2(current_direction, angle_increment);
+    }
+}
+
+void checkWallRays(Game * game, Entity * ent, float * current_rays) {
+    Vector2 current_direction = rotateVector2(ent->direction, -game->ray_angle / 2.);
+    float angle_increment = game->ray_angle / (game->ray_number - 1);
+    Vector2 x_wall_start = {ent->position.x < game->size.x / 2. ? 0 : game->size.x, 0};
+    Vector2 x_wall_end = {ent->position.x < game->size.x / 2. ? 0 : game->size.x, game->size.y};
+    Vector2 y_wall_start = {0, ent->position.y < game->size.y / 2. ? 0 : game->size.y};
+    Vector2 y_wall_end = {game->size.x, ent->position.y < game->size.y / 2. ? 0 : game->size.y};
+    for (int i = 0; i < game->ray_number; i++) {
+        Vector2 ray_start = ent->position;
+        Vector2 ray_end = addVector2(ent->position, flatMultiplyVector2(current_direction, game->ray_length));
+        float x_wall_distance = lineLineCollision(ray_start, x_wall_start, ray_end, x_wall_end);
+        float y_wall_distance = lineLineCollision(ray_start, y_wall_start, ray_end, y_wall_end);
+        x_wall_distance = x_wall_distance < y_wall_distance ? x_wall_distance : y_wall_distance;
+        current_rays[i] = x_wall_distance / game->ray_length < current_rays[i] ? x_wall_distance / game->ray_length : current_rays[i];
     }
 }
 
@@ -263,8 +271,8 @@ void gameTick(Game * game) {
                 }
             }
         }
+        checkWallRays(game, game->entities[r], ray_length_array);
         for (int cur = 0; cur < game->ray_number; cur++) {
-            //printf("ent num: %i, ray num: %i, ray_length: %f\n", r, cur, ray_length_array[cur]);
             if (ray_length_array[cur] == 0) {
                 game->entities[r]->fitness += 20;
             }
@@ -341,22 +349,4 @@ void writeGameHeader(Game * game) {
     fwrite(&game->entity_size, sizeof(float), 1, fp);
     fwrite(&game->max_ticks, sizeof(int), 1, fp);
     fclose(fp);
-}
-
-int main() {
-    srand(time(NULL));
-    Game * game = createGame(100, (Vector2){500, 500}, 1, 5, 0.4, 20, 7, 2 * 3.1415 / 3, 3000, 100);
-    writeGameHeader(game);
-    for (int epoch = 0; epoch < game->max_epochs; epoch++) {
-        game->crashes = 0;
-        for (int tick = 0; tick < game->max_ticks; tick++) {
-            gameTick(game);
-            if (epoch == game->max_epochs - 1) {
-                writePositions(game);
-            }
-        }
-        printf("epoch %i: ", epoch);
-        gameEnd(game);
-    }
-    freeGame(game);
 }
