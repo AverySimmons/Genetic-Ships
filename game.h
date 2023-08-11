@@ -30,6 +30,7 @@ typedef struct {
     int max_ticks;
     int max_epochs;
     int crashes;
+    Vector2 target_point;
 } Game;
 
 typedef struct ListNode {
@@ -142,10 +143,11 @@ Game * createGame(int entity_num, Vector2 size, float entity_speed, float entity
     new_game->ray_angle = ray_angle;
     new_game->max_ticks = max_ticks;
     new_game->max_epochs = max_epochs;
+    new_game->target_point = (Vector2){rand() % (int)size.x / 2 + size.x / 4, rand() % (int)size.y / 2 + size.y / 4};
     new_game->entities = (Entity **) malloc(sizeof(Entity *) * entity_num);
     for (int i = 0; i < entity_num; i++) {
         new_game->entities[i] = (Entity *) malloc(sizeof(Entity));
-        new_game->entities[i]->brain = createNetwork(new_game->ray_number, 2, (int[]){4, 2});
+        new_game->entities[i]->brain = createNetwork(new_game->ray_number + 5, 2, (int[]){7, 2});
         new_game->entities[i]->fitness = 0;
         spawnEntity(new_game->entities[i], new_game);
     }
@@ -249,7 +251,7 @@ void gameTick(Game * game) {
         int cur_cell_x = (int)floor(game->entities[r]->position.x / cell_size);
         int cur_cell_y = (int)floor(game->entities[r]->position.y / cell_size);
 
-        float * ray_length_array = (float *) malloc(sizeof(float) * game->ray_number);
+        float * ray_length_array = (float *) malloc(sizeof(float) * (game->ray_number + 5));
         for (int i = 0; i < game->ray_number; i++) {
             ray_length_array[i] = 1.;
         }
@@ -274,10 +276,18 @@ void gameTick(Game * game) {
         checkWallRays(game, game->entities[r], ray_length_array);
         for (int cur = 0; cur < game->ray_number; cur++) {
             if (ray_length_array[cur] == 0) {
-                game->entities[r]->fitness += 20;
+                game->entities[r]->fitness -= 100;
             }
         }
-        float * brain_output = calculateNetwork(game->entities[r]->brain, game->ray_number, ray_length_array);
+        float target_dist = lengthVector2(subVector2(game->entities[r]->position, game->target_point));
+        game->entities[r]->fitness += target_dist < 100 ? 100 : -20;
+        Vector2 direction_vect = normalizeVector2(subVector2(game->target_point, game->entities[r]->position));
+        ray_length_array[game->ray_number] = direction_vect.x;
+        ray_length_array[game->ray_number + 1] = direction_vect.y;
+        ray_length_array[game->ray_number + 2] = target_dist / lengthVector2(game->size);
+        ray_length_array[game->ray_number + 3] = game->entities[r]->direction.x;
+        ray_length_array[game->ray_number + 4] = game->entities[r]->direction.y;
+        float * brain_output = calculateNetwork(game->entities[r]->brain, game->ray_number + 5, ray_length_array);
         free(ray_length_array);
         game->entities[r]->direction = rotateVector2(game->entities[r]->direction, (brain_output[0] - 0.5) * game->turn_speed);
         game->entities[r]->current_speed = brain_output[1];
@@ -289,7 +299,7 @@ void gameTick(Game * game) {
         if (game->entities[i]->position.x < 0 || game->entities[i]->position.x >= game->size.x || 
          game->entities[i]->position.y < 0 || game->entities[i]->position.y >= game->size.y) {
             spawnEntity(game->entities[i], game);
-            game->entities[i]->fitness += 0;
+            game->entities[i]->fitness -= 5000;
             game->crashes += 1;
         }
     }
@@ -318,7 +328,7 @@ void writePositions(Game * game) {
 }
 
 void gameEnd(Game * game) {
-    int crossover_safe_number = ceil(game->entity_num / 2.);
+    int crossover_safe_number = ceil(game->entity_num / 4.);
     int mutate_safe_number = ceil(game->entity_num / 20.);
     qsort(game->entities, game->entity_num, sizeof(Entity *), compareFitness);
     float average_fitness = 0;
@@ -326,7 +336,7 @@ void gameEnd(Game * game) {
         average_fitness += game->entities[i]->fitness;
     }
     average_fitness /= game->entity_num;
-    printf("crashes: %i - best_fitness: %f - average_fitness: %f\n", game->crashes, game->entities[game->entity_num-1]->fitness, average_fitness);
+    printf("crashes: %i - best_fitness: %f - average_fitness: %f - target_point: (%f, %f)\n", game->crashes, game->entities[game->entity_num-1]->fitness, average_fitness, game->target_point.x, game->target_point.y);
     for (int i = 0; i < game->entity_num; i++) {
         if (i < game->entity_num - crossover_safe_number && i % 2 == 0) {
             int parent_index1 = game->entity_num - 1 - rand() % crossover_safe_number;
@@ -339,6 +349,7 @@ void gameEnd(Game * game) {
         game->entities[i]->fitness = 0;
         spawnEntity(game->entities[i], game);
     }
+    game->target_point = (Vector2){rand() % (int)game->size.x / 2 + game->size.x / 4, rand() % (int)game->size.y / 2 + game->size.y / 4};
 }
 
 void writeGameHeader(Game * game) {

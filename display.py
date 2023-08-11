@@ -45,6 +45,7 @@ def main() -> None:
             if event.type == py.QUIT:
                 running = False
         screen.fill("white")
+        py.draw.circle(screen, py.Color(200, 200, 200), py.Vector2(213, 244), 100)
         for ent in entity_array:
             py.draw.circle(screen, ent.color, py.Vector2(ent.x_array[tick], ent.y_array[tick]), entity_size)
         py.display.flip()
