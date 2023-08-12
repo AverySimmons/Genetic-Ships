@@ -280,7 +280,7 @@ void gameTick(Game * game) {
             }
         }
         float target_dist = lengthVector2(subVector2(game->entities[r]->position, game->target_point));
-        game->entities[r]->fitness += target_dist < 100 ? 100 : -20;
+        game->entities[r]->fitness += target_dist < 100 ? 150 : target_dist < 200 ? 0 : -50;
         Vector2 direction_vect = normalizeVector2(subVector2(game->target_point, game->entities[r]->position));
         ray_length_array[game->ray_number] = direction_vect.x;
         ray_length_array[game->ray_number + 1] = direction_vect.y;
@@ -328,7 +328,7 @@ void writePositions(Game * game) {
 }
 
 void gameEnd(Game * game) {
-    int crossover_safe_number = ceil(game->entity_num / 4.);
+    int crossover_safe_number = ceil(game->entity_num / 2.);
     int mutate_safe_number = ceil(game->entity_num / 20.);
     qsort(game->entities, game->entity_num, sizeof(Entity *), compareFitness);
     float average_fitness = 0;
@@ -352,12 +352,21 @@ void gameEnd(Game * game) {
     game->target_point = (Vector2){rand() % (int)game->size.x / 2 + game->size.x / 4, rand() % (int)game->size.y / 2 + game->size.y / 4};
 }
 
-void writeGameHeader(Game * game) {
+void writeEpochHeader(Game * game) {
+    FILE * fp = fopen("data.bin", "ab");
+    fwrite(&game->target_point.x, sizeof(float), 1, fp);
+    fwrite(&game->target_point.y, sizeof(float), 1, fp);
+    fclose(fp);
+}
+
+void writeGameHeader(Game * game, int write_rate) {
     FILE * fp = fopen("data.bin", "wb");
     fwrite(&game->size.x, sizeof(float), 1, fp);
     fwrite(&game->size.y, sizeof(float), 1, fp);
     fwrite(&game->entity_num, sizeof(int), 1, fp);
     fwrite(&game->entity_size, sizeof(float), 1, fp);
     fwrite(&game->max_ticks, sizeof(int), 1, fp);
+    int epoch_number = ceil(game->max_epochs / write_rate) + 1;
+    fwrite(&epoch_number, sizeof(int), 1, fp);
     fclose(fp);
 }
