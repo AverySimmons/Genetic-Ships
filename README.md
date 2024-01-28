@@ -3,7 +3,7 @@
 
 ---
 
-**Tools Used:** C, Python, Pygame &nbsp;&nbsp;&nbsp;&nbsp; **Keywords:** Genetic learning, Optimization, Ray casting
+**Tools Used:** C, Python, Pygame &nbsp;&nbsp;&nbsp;&nbsp; **Keywords:** Genetic learning, Optimization, Collision, Low level
 
 ---
 
@@ -12,10 +12,28 @@
 
 
 ### Features:
-- &nbsp;&nbsp;&nbsp;&nbsp;**Feature:**  
+- &nbsp;&nbsp;&nbsp;&nbsp;**Low Level:**  
+talk about data structures and memory
+
+- &nbsp;&nbsp;&nbsp;&nbsp;**Collision Logic:**  
+talk about data structures and memory
+
+- &nbsp;&nbsp;&nbsp;&nbsp;**Game Optimization:**  
+Talk
+
+- &nbsp;&nbsp;&nbsp;&nbsp;**Machine Learning:**  
 Feature description
 
 
 ### Code Breakdown:
-- &nbsp;&nbsp;&nbsp;&nbsp;**File:**  
+- &nbsp;&nbsp;&nbsp;&nbsp;**Game:**  
+File description
+
+- &nbsp;&nbsp;&nbsp;&nbsp;**Brain:**  
+File description
+
+- &nbsp;&nbsp;&nbsp;&nbsp;**Display:**  
+File description
+
+- &nbsp;&nbsp;&nbsp;&nbsp;**Main:**  
 File description
