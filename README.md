@@ -23,7 +23,7 @@ The training of the model in this project is done through a custom genetic learn
 
 
 ### Code Breakdown:
-- &nbsp;&nbsp;&nbsp;&nbsp;**Game:**
+- &nbsp;&nbsp;&nbsp;&nbsp;**Game:**  
 Contains all game code, including ship and game structures as well as collision logic.
 
 - &nbsp;&nbsp;&nbsp;&nbsp;**Brain:**  
